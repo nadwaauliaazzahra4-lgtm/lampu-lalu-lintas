@@ -1,502 +1,1014 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="id" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simulasi PLC Lampu Lalu Lintas 4 Arah</title>
-    <style>
-        :root {
-            --bg-color: #0f172a;
-            --panel-bg: #1e293b;
-            --border-color: #334155;
-            --text-main: #f8fafc;
-            --text-muted: #94a3b8;
-            --primary: #3b82f6;
-            --danger: #ef4444;
-            --success: #22c55e;
-            --warning: #eab308;
-        }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-
-        body {
-            background-color: var(--bg-color);
-            color: var(--text-main);
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 20px;
-        }
-
-        header {
-            text-align: center;
-            margin-bottom: 20px;
-        }
-
-        header h1 {
-            font-size: 1.8rem;
-            color: var(--primary);
-            margin-bottom: 5px;
-        }
-
-        header p {
-            color: var(--text-muted);
-            font-size: 0.95rem;
-        }
-
-        .main-container {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-            max-width: 1200px;
-            width: 100%;
-        }
-
-        @media (max-width: 900px) {
-            .main-container {
-                grid-template-columns: 1fr;
+    <title>PLC Traffic Control Studio - Single File</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    }
+                }
             }
         }
+    </script>
+    <!-- FontAwesome & Google Fonts -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        /* Efek Cahaya Lampu Lalu Lintas */
+        .lamp-red-on    { background: #ef4444; box-shadow: 0 0 14px #ef4444, inset 0 0 4px #fecaca; opacity: 1; }
+        .lamp-yellow-on { background: #eab308; box-shadow: 0 0 14px #eab308, inset 0 0 4px #fef08a; opacity: 1; }
+        .lamp-green-on  { background: #22c55e; box-shadow: 0 0 14px #22c55e, inset 0 0 4px #bbf7d0; opacity: 1; }
+        .lamp-off       { opacity: 0.2; box-shadow: inset 0 2px 4px rgba(0,0,0,0.9); }
 
-        .panel {
-            background-color: var(--panel-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 20px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
-        }
+        /* Aliran Daya (Power Flow) Ladder Diagram PLC */
+        .rail-power { border-color: #10b981 !important; box-shadow: 0 0 8px rgba(16, 185, 129, 0.35); }
+        .contact-on { border-color: #10b981; background: rgba(16, 185, 129, 0.15); color: #34d399; }
+        .coil-on    { border-color: #10b981; background: rgba(16, 185, 129, 0.25); color: #6ee7b7; box-shadow: 0 0 10px rgba(16, 185, 129, 0.4); }
 
-        .panel h2 {
-            font-size: 1.2rem;
-            margin-bottom: 15px;
-            border-bottom: 2px solid var(--border-color);
-            padding-bottom: 8px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        /* Simulasi Perempatan */
-        .intersection-container {
-            position: relative;
-            width: 100%;
-            height: 380px;
-            background-color: #1e293b;
-            border-radius: 8px;
-            overflow: hidden;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            border: 2px solid var(--border-color);
-        }
-
-        .road-h, .road-v {
-            position: absolute;
-            background-color: #334155;
-        }
-
-        .road-h {
-            width: 100%;
-            height: 120px;
-        }
-
-        .road-v {
-            width: 120px;
-            height: 100%;
-        }
-
-        .road-marking-h {
-            position: absolute;
-            width: 100%;
-            height: 2px;
-            border-top: 2px dashed #cbd5e1;
-            top: 50%;
-            transform: translateY(-50%);
-        }
-
-        .road-marking-v {
-            position: absolute;
-            height: 100%;
-            width: 2px;
-            border-left: 2px dashed #cbd5e1;
-            left: 50%;
-            transform: translateX(-50%);
-        }
-
-        /* Traffic Light Position */
-        .tl-box {
-            position: absolute;
-            background: #0f172a;
-            border: 2px solid #475569;
-            border-radius: 6px;
-            padding: 6px;
-            display: flex;
-            gap: 4px;
-            z-index: 10;
-        }
-
-        .tl-north { top: 10px; left: 50%; transform: translateX(-50%); flex-direction: row; }
-        .tl-south { bottom: 10px; left: 50%; transform: translateX(-50%); flex-direction: row; }
-        .tl-east { right: 10px; top: 50%; transform: translateY(-50%); flex-direction: column; }
-        .tl-west { left: 10px; top: 50%; transform: translateY(-50%); flex-direction: column; }
-
-        .lamp {
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            background-color: #334155;
-            box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);
-            transition: background-color 0.2s, box-shadow 0.2s;
-        }
-
-        .lamp.red.active { background-color: var(--danger); box-shadow: 0 0 12px var(--danger); }
-        .lamp.yellow.active { background-color: var(--warning); box-shadow: 0 0 12px var(--warning); }
-        .lamp.green.active { background-color: var(--success); box-shadow: 0 0 12px var(--success); }
-
-        /* Vehicle Animation */
-        .car {
-            position: absolute;
-            background-color: var(--primary);
-            border-radius: 4px;
-            z-index: 5;
-            transition: all 0.3s linear;
-        }
-        .car.h { width: 30px; height: 16px; }
-        .car.v { width: 16px; height: 30px; }
-
-        /* PLC Controls & Dashboard */
-        .controls-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 10px;
-            margin-bottom: 15px;
-        }
-
-        .btn {
-            padding: 10px 15px;
-            border: none;
-            border-radius: 6px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: filter 0.2s, transform 0.1s;
-        }
-
-        .btn:active { transform: scale(0.98); }
-        .btn-start { background-color: var(--success); color: white; }
-        .btn-stop { background-color: var(--danger); color: white; }
-        .btn-emergency { background-color: var(--warning); color: #000; grid-column: span 2; }
-        .btn:hover { filter: brightness(1.1); }
-
-        .plc-status {
-            background-color: #0f172a;
-            border-radius: 8px;
-            padding: 12px;
-            font-family: 'Courier New', Courier, monospace;
-            font-size: 0.85rem;
-            border: 1px solid var(--border-color);
-        }
-
-        .status-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 6px;
-        }
-
-        .status-label { color: var(--text-muted); }
-        .status-val { font-weight: bold; }
-        .status-val.active { color: var(--success); }
-        .status-val.inactive { color: var(--danger); }
-
-        /* Ladder Diagram View */
-        .ladder-viewer {
-            background-color: #0f172a;
-            border-radius: 8px;
-            padding: 12px;
-            font-family: 'Courier New', Courier, monospace;
-            font-size: 0.85rem;
-            border: 1px solid var(--border-color);
-            margin-top: 15px;
-            overflow-x: auto;
-        }
-
-        .ladder-title {
-            font-size: 0.9rem;
-            color: var(--primary);
-            margin-bottom: 8px;
-            font-weight: bold;
-        }
-
-        .rung {
-            white-space: pre;
-            line-height: 1.4;
-            color: #cbd5e1;
-        }
-
-        .rung span.highlight {
-            color: var(--success);
-            font-weight: bold;
-        }
-
-        .settings-box {
-            margin-top: 15px;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .setting-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 0.9rem;
-        }
-
-        .setting-item input {
-            background: #0f172a;
-            border: 1px solid var(--border-color);
-            color: white;
-            padding: 4px 8px;
-            border-radius: 4px;
-            width: 80px;
-            text-align: center;
+        /* Sorot lampu mobil */
+        .car-beam {
+            background: radial-gradient(ellipse at center, rgba(254, 240, 138, 0.45) 0%, rgba(254, 240, 138, 0) 75%);
         }
     </style>
 </head>
-<body>
+<body class="bg-slate-950 text-slate-100 font-sans min-h-screen flex flex-col">
 
-    <header>
-        <h1>Simulasi PLC Lampu Lalu Lintas 4 Arah</h1>
-        <p>Sistem Kontrol Sekuensial Berurutan (Utara &rarr; Timur &rarr; Selatan &rarr; Barat)</p>
+    <!-- Top Industrial Header -->
+    <header class="bg-slate-900 border-b border-slate-800 px-4 sm:px-6 py-3.5 flex flex-wrap justify-between items-center gap-3 sticky top-0 z-30">
+        <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-cyan-600 flex items-center justify-center text-slate-950 font-bold shadow-lg shadow-emerald-500/20">
+                <i class="fa-solid fa-microchip text-lg"></i>
+            </div>
+            <div>
+                <div class="flex items-center space-x-2">
+                    <h1 class="text-base sm:text-lg font-bold tracking-tight text-white">Traffic Controller</h1>
+                </div>
+                <p class="text-xs text-slate-400">Cyclic Scan Engine (10ms) &bull; Ladder Logic &bull; Simulasi Lalu Lintas 4 Arah</p>
+            </div>
+        </div>
+
+        <!-- PLC CPU Status Indicators -->
+        <div class="flex items-center space-x-2 sm:space-x-3 font-mono text-xs">
+            <div class="bg-slate-950 border border-slate-800 px-3 py-1.5 rounded-lg flex items-center space-x-3">
+                <span class="flex items-center space-x-1.5">
+                    <span id="cpu-led-run" class="w-2.5 h-2.5 rounded-full bg-slate-700"></span>
+                    <span class="text-slate-400">RUN</span>
+                </span>
+                <span class="flex items-center space-x-1.5">
+                    <span id="cpu-led-stop" class="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-[0_0_8px_#f59e0b]"></span>
+                    <span class="text-slate-400">STOP</span>
+                </span>
+                <span class="flex items-center space-x-1.5">
+                    <span id="cpu-led-err" class="w-2.5 h-2.5 rounded-full bg-slate-700"></span>
+                    <span class="text-slate-400">ERR</span>
+                </span>
+            </div>
+            <div class="hidden sm:block bg-slate-950 border border-slate-800 px-3 py-1.5 rounded-lg text-cyan-400">
+                Cycle: <span id="plc-scan-ms">10</span>ms
+            </div>
+        </div>
     </header>
 
-    <div class="main-container">
-        <!-- Kolom Kiri: Visualisasi Perempatan & Kendaraan -->
-        <div class="panel">
-            <h2>Visualisasi Perempatan <span id="activeStateLabel" style="font-size:0.85rem; color:var(--success);">Status: RUNNING</span></h2>
-            
-            <div class="intersection-container" id="intersection">
-                <!-- Jalan -->
-                <div class="road-h"><div class="road-marking-h"></div></div>
-                <div class="road-v"><div class="road-marking-v"></div></div>
+    <!-- Main Workspace -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
 
-                <!-- Lampu Lalu Lintas -->
-                <!-- Utara -->
-                <div class="tl-box tl-north">
-                    <div class="lamp red" id="n-red"></div>
-                    <div class="lamp yellow" id="n-yellow"></div>
-                    <div class="lamp green" id="n-green"></div>
+        <!-- KOLOM KIRI: Visualisasi Persimpangan & Panel Operator HMI (7 Kolom) -->
+        <div class="lg:col-span-7 flex flex-col space-y-5">
+
+            <!-- Card Visualisasi Persimpangan -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl">
+                <div class="flex flex-wrap justify-between items-center gap-2 mb-3">
+                    <div class="flex items-center space-x-2">
+                        <i class="fa-solid fa-traffic-light text-emerald-400"></i>
+                        <h2 class="text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-200">Field Plant: Persimpangan 4 Arah</h2>
+                    </div>
+                    <div id="active-step-badge" class="text-xs font-mono font-semibold px-2.5 py-1 rounded-md bg-slate-950 border border-slate-800 text-amber-400">
+                        STATE: M0 (ALL RED / SAFE)
+                    </div>
                 </div>
-                <!-- Timur -->
-                <div class="tl-box tl-east">
-                    <div class="lamp red" id="e-red"></div>
-                    <div class="lamp yellow" id="e-yellow"></div>
-                    <div class="lamp green" id="e-green"></div>
+
+                <!-- Viewport Simulasi 1:1 Responsif -->
+                <div class="relative w-full aspect-square max-w-[500px] mx-auto bg-[#0b131e] rounded-2xl border-2 border-slate-800 overflow-hidden shadow-inner select-none">
+                    
+                    <!-- SVG Jalan Raya, Trotoar, Zebra Cross & Stop Line -->
+                    <svg class="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 500 500" fill="none">
+                        <!-- Area Trotoar 4 Sudut -->
+                        <rect x="0" y="0" width="175" height="175" rx="14" fill="#111d2b" stroke="#1e293b" stroke-width="2"/>
+                        <rect x="325" y="0" width="175" height="175" rx="14" fill="#111d2b" stroke="#1e293b" stroke-width="2"/>
+                        <rect x="0" y="325" width="175" height="175" rx="14" fill="#111d2b" stroke="#1e293b" stroke-width="2"/>
+                        <rect x="325" y="325" width="175" height="175" rx="14" fill="#111d2b" stroke="#1e293b" stroke-width="2"/>
+
+                        <!-- GEDUNG PERKOTAAN 4 SUDUT (Top-Down Architectural View) -->
+                        <!-- 1. Sudut Kiri-Atas: Gedung Perkantoran & Ruang Kontrol PLC -->
+                        <g>
+                            <!-- Bayangan Gedung -->
+                            <rect x="18" y="20" width="95" height="75" rx="8" fill="#060a10" opacity="0.7"/>
+                            <!-- Badan & Atap Gedung Utama -->
+                            <rect x="14" y="14" width="95" height="75" rx="8" fill="#1e293b" stroke="#334155" stroke-width="2"/>
+                            <rect x="22" y="22" width="79" height="59" rx="5" fill="#0f172a" stroke="#1e293b" stroke-width="1.5"/>
+                            <!-- Unit HVAC / AC Atap & Helipad/Solar Panel -->
+                            <rect x="30" y="30" width="26" height="18" rx="2" fill="#1e3a5f" stroke="#0284c7" stroke-width="1"/>
+                            <line x1="30" y1="36" x2="56" y2="36" stroke="#0284c7" stroke-width="0.8"/>
+                            <line x1="30" y1="42" x2="56" y2="42" stroke="#0284c7" stroke-width="0.8"/>
+                            <line x1="43" y1="30" x2="43" y2="48" stroke="#0284c7" stroke-width="0.8"/>
+                            <rect x="68" y="32" width="22" height="16" rx="2" fill="#334155" stroke="#475569" stroke-width="1"/>
+                            <circle cx="79" cy="40" r="5" fill="#1e293b" stroke="#64748b" stroke-width="1"/>
+                            <!-- Pos Kontrol PLC Kecil -->
+                            <rect x="122" y="22" width="38" height="44" rx="5" fill="#1e293b" stroke="#06b6d4" stroke-width="1.5"/>
+                            <rect x="128" y="28" width="26" height="32" rx="3" fill="#0f172a"/>
+                            <circle cx="141" cy="44" r="4" fill="#10b981" opacity="0.8"/>
+                        </g>
+
+                        <!-- 2. Sudut Kanan-Atas: Pusat Perbelanjaan / Minimarket -->
+                        <g>
+                            <rect x="386" y="20" width="102" height="82" rx="8" fill="#060a10" opacity="0.7"/>
+                            <rect x="382" y="14" width="102" height="82" rx="8" fill="#27272a" stroke="#3f3f46" stroke-width="2"/>
+                            <rect x="390" y="22" width="86" height="66" rx="4" fill="#18181b"/>
+                            <!-- Skylight Kaca Atap -->
+                            <rect x="402" y="32" width="62" height="24" rx="3" fill="#0c4a6e" stroke="#38bdf8" stroke-width="1" opacity="0.85"/>
+                            <line x1="422" y1="32" x2="422" y2="56" stroke="#38bdf8" stroke-width="1"/>
+                            <line x1="444" y1="32" x2="444" y2="56" stroke="#38bdf8" stroke-width="1"/>
+                            <!-- Kanopi Depan -->
+                            <rect x="396" y="88" width="74" height="8" rx="2" fill="#0284c7"/>
+                        </g>
+
+                        <!-- 3. Sudut Kiri-Bawah: Apartemen / Residensial -->
+                        <g>
+                            <rect x="18" y="392" width="88" height="96" rx="8" fill="#060a10" opacity="0.7"/>
+                            <rect x="14" y="386" width="88" height="96" rx="8" fill="#1e293b" stroke="#334155" stroke-width="2"/>
+                            <rect x="22" y="394" width="72" height="80" rx="5" fill="#0f172a"/>
+                            <!-- Rooftop Garden & Tangga Darurat -->
+                            <rect x="28" y="402" width="34" height="64" rx="4" fill="#064e3b" opacity="0.75"/>
+                            <rect x="70" y="404" width="18" height="24" rx="2" fill="#334155"/>
+                            <rect x="70" y="438" width="18" height="24" rx="2" fill="#334155"/>
+                        </g>
+
+                        <!-- 4. Sudut Kanan-Bawah: Gedung Komersial & Menara -->
+                        <g>
+                            <rect x="392" y="390" width="96" height="98" rx="10" fill="#060a10" opacity="0.7"/>
+                            <rect x="388" y="384" width="96" height="98" rx="10" fill="#1e293b" stroke="#475569" stroke-width="2"/>
+                            <rect x="398" y="394" width="76" height="78" rx="6" fill="#0f172a"/>
+                            <!-- Helipad (H) di Atap Gedung -->
+                            <circle cx="436" cy="433" r="24" fill="#1e293b" stroke="#eab308" stroke-width="2" stroke-dasharray="5 3"/>
+                            <path d="M 429 423 L 429 443 M 443 423 L 443 443 M 429 433 L 443 433" stroke="#eab308" stroke-width="3" stroke-linecap="round"/>
+                        </g>
+
+                        <!-- Dekorasi Pohon / Taman Kota di Sela Trotoar -->
+                        <circle cx="138" cy="105" r="16" fill="#064e3b" opacity="0.7"/>
+                        <circle cx="135" cy="102" r="10" fill="#059669" opacity="0.8"/>
+                        <circle cx="356" cy="52" r="17" fill="#064e3b" opacity="0.7"/>
+                        <circle cx="359" cy="49" r="11" fill="#059669" opacity="0.8"/>
+                        <circle cx="135" cy="445" r="18" fill="#064e3b" opacity="0.7"/>
+                        <circle cx="132" cy="448" r="12" fill="#059669" opacity="0.8"/>
+                        <circle cx="360" cy="445" r="16" fill="#064e3b" opacity="0.7"/>
+                        <circle cx="363" cy="448" r="10" fill="#059669" opacity="0.8"/>
+
+                        <!-- Aspal Jalan (x: 175-325 = 35%-65%, y: 175-325 = 35%-65%) -->
+                        <rect x="175" y="0" width="150" height="500" fill="#1e293b"/>
+                        <rect x="0" y="175" width="500" height="150" fill="#1e293b"/>
+
+                        <!-- Marka Tepi Jalan -->
+                        <line x1="178" y1="0" x2="178" y2="175" stroke="#475569" stroke-width="2"/>
+                        <line x1="322" y1="0" x2="322" y2="175" stroke="#475569" stroke-width="2"/>
+                        <line x1="178" y1="325" x2="178" y2="500" stroke="#475569" stroke-width="2"/>
+                        <line x1="322" y1="325" x2="322" y2="500" stroke="#475569" stroke-width="2"/>
+                        <line x1="0" y1="178" x2="175" y2="178" stroke="#475569" stroke-width="2"/>
+                        <line x1="0" y1="322" x2="175" y2="322" stroke="#475569" stroke-width="2"/>
+                        <line x1="325" y1="178" x2="500" y2="178" stroke="#475569" stroke-width="2"/>
+                        <line x1="325" y1="322" x2="500" y2="322" stroke="#475569" stroke-width="2"/>
+
+                        <!-- Marka Kuning Ganda Tengah -->
+                        <line x1="248" y1="0" x2="248" y2="152" stroke="#eab308" stroke-width="2"/>
+                        <line x1="252" y1="0" x2="252" y2="152" stroke="#eab308" stroke-width="2"/>
+                        <line x1="248" y1="348" x2="248" y2="500" stroke="#eab308" stroke-width="2"/>
+                        <line x1="252" y1="348" x2="252" y2="500" stroke="#eab308" stroke-width="2"/>
+                        <line x1="0" y1="248" x2="152" y2="248" stroke="#eab308" stroke-width="2"/>
+                        <line x1="0" y1="252" x2="152" y2="252" stroke="#eab308" stroke-width="2"/>
+                        <line x1="348" y1="248" x2="500" y2="248" stroke="#eab308" stroke-width="2"/>
+                        <line x1="348" y1="252" x2="500" y2="252" stroke="#eab308" stroke-width="2"/>
+
+                        <!-- Zebra Cross 4 Arah -->
+                        <g fill="#cbd5e1" opacity="0.4">
+                            <!-- Utara -->
+                            <rect x="184" y="158" width="10" height="15"/><rect x="200" y="158" width="10" height="15"/>
+                            <rect x="216" y="158" width="10" height="15"/><rect x="232" y="158" width="10" height="15"/>
+                            <rect x="258" y="158" width="10" height="15"/><rect x="274" y="158" width="10" height="15"/>
+                            <rect x="290" y="158" width="10" height="15"/><rect x="306" y="158" width="10" height="15"/>
+                            <!-- Selatan -->
+                            <rect x="184" y="327" width="10" height="15"/><rect x="200" y="327" width="10" height="15"/>
+                            <rect x="216" y="327" width="10" height="15"/><rect x="232" y="327" width="10" height="15"/>
+                            <rect x="258" y="327" width="10" height="15"/><rect x="274" y="327" width="10" height="15"/>
+                            <rect x="290" y="327" width="10" height="15"/><rect x="306" y="327" width="10" height="15"/>
+                            <!-- Barat -->
+                            <rect x="158" y="184" width="15" height="10"/><rect x="158" y="200" width="15" height="10"/>
+                            <rect x="158" y="216" width="15" height="10"/><rect x="158" y="232" width="15" height="10"/>
+                            <rect x="158" y="258" width="15" height="10"/><rect x="158" y="274" width="15" height="10"/>
+                            <rect x="158" y="290" width="15" height="10"/><rect x="158" y="306" width="15" height="10"/>
+                            <!-- Timur -->
+                            <rect x="327" y="184" width="15" height="10"/><rect x="327" y="200" width="15" height="10"/>
+                            <rect x="327" y="216" width="15" height="10"/><rect x="327" y="232" width="15" height="10"/>
+                            <rect x="327" y="258" width="15" height="10"/><rect x="327" y="274" width="15" height="10"/>
+                            <rect x="327" y="290" width="15" height="10"/><rect x="327" y="306" width="15" height="10"/>
+                        </g>
+
+                        <!-- Garis Henti (Stop Line) -->
+                        <line x1="178" y1="152" x2="248" y2="152" stroke="#f8fafc" stroke-width="4" stroke-linecap="round"/>
+                        <line x1="252" y1="348" x2="322" y2="348" stroke="#f8fafc" stroke-width="4" stroke-linecap="round"/>
+                        <line x1="152" y1="252" x2="152" y2="322" stroke="#f8fafc" stroke-width="4" stroke-linecap="round"/>
+                        <line x1="348" y1="178" x2="348" y2="248" stroke="#f8fafc" stroke-width="4" stroke-linecap="round"/>
+
+                        <!-- Sensor Loop Induktif (PLC Input Proximity/Loop Detector) -->
+                        <rect x="195" y="122" width="35" height="22" rx="3" stroke="#06b6d4" stroke-width="1.5" stroke-dasharray="4 3" fill="rgba(6,182,212,0.06)"/>
+                        <rect x="270" y="356" width="35" height="22" rx="3" stroke="#06b6d4" stroke-width="1.5" stroke-dasharray="4 3" fill="rgba(6,182,212,0.06)"/>
+                        <rect x="122" y="270" width="22" height="35" rx="3" stroke="#06b6d4" stroke-width="1.5" stroke-dasharray="4 3" fill="rgba(6,182,212,0.06)"/>
+                        <rect x="356" y="195" width="22" height="35" rx="3" stroke="#06b6d4" stroke-width="1.5" stroke-dasharray="4 3" fill="rgba(6,182,212,0.06)"/>
+                    </svg>
+
+                    <!-- Layer Animasi Kendaraan -->
+                    <div id="vehicles-container" class="absolute inset-0 pointer-events-none z-10"></div>
+
+                    <!-- LAMPU LALU LINTAS (Terpasang presisi di sudut trotoar tiap jalur) -->
+
+                    <!-- 1. UTARA (Sudut Kiri-Atas, sebelum garis henti y=30.4%) -->
+                    <div class="absolute top-[29.5%] left-[32.5%] -translate-x-full -translate-y-full flex flex-col items-end z-20">
+                        <div class="bg-slate-900 border border-slate-700 p-1.5 rounded-xl shadow-xl flex flex-col space-y-1.5 relative">
+                            <div id="lamp-N-R" class="w-3.5 h-3.5 rounded-full bg-red-500 lamp-red-on transition-all"></div>
+                            <div id="lamp-N-Y" class="w-3.5 h-3.5 rounded-full bg-yellow-500 lamp-off transition-all"></div>
+                            <div id="lamp-N-G" class="w-3.5 h-3.5 rounded-full bg-green-500 lamp-off transition-all"></div>
+                            <div class="w-2.5 h-1 bg-slate-600 absolute -right-2.5 bottom-2 rounded-r"></div>
+                        </div>
+                        <span class="text-[9px] font-mono font-bold text-slate-300 bg-slate-900/90 px-1.5 py-0.5 rounded mt-1 border border-slate-700">UTARA (Q0.0-2)</span>
+                    </div>
+
+                    <!-- 2. TIMUR (Sudut Kanan-Atas, sebelum garis henti x=69.6%) -->
+                    <div class="absolute top-[32.5%] right-[29.5%] translate-x-full -translate-y-full flex flex-col items-start z-20">
+                        <span class="text-[9px] font-mono font-bold text-slate-300 bg-slate-900/90 px-1.5 py-0.5 rounded mb-1 border border-slate-700">TIMUR (Q0.3-5)</span>
+                        <div class="bg-slate-900 border border-slate-700 p-1.5 rounded-xl shadow-xl flex space-x-1.5 relative">
+                            <div id="lamp-E-G" class="w-3.5 h-3.5 rounded-full bg-green-500 lamp-off transition-all"></div>
+                            <div id="lamp-E-Y" class="w-3.5 h-3.5 rounded-full bg-yellow-500 lamp-off transition-all"></div>
+                            <div id="lamp-E-R" class="w-3.5 h-3.5 rounded-full bg-red-500 lamp-red-on transition-all"></div>
+                            <div class="w-1 h-2.5 bg-slate-600 absolute left-2 -bottom-2.5 rounded-b"></div>
+                        </div>
+                    </div>
+
+                    <!-- 3. SELATAN (Sudut Kanan-Bawah, sebelum garis henti y=69.6%) -->
+                    <div class="absolute bottom-[29.5%] right-[32.5%] translate-x-full translate-y-full flex flex-col items-start z-20">
+                        <span class="text-[9px] font-mono font-bold text-slate-300 bg-slate-900/90 px-1.5 py-0.5 rounded mb-1 border border-slate-700">SELATAN (Q1.0-2)</span>
+                        <div class="bg-slate-900 border border-slate-700 p-1.5 rounded-xl shadow-xl flex flex-col space-y-1.5 relative">
+                            <div class="w-2.5 h-1 bg-slate-600 absolute -left-2.5 top-2 rounded-l"></div>
+                            <div id="lamp-S-G" class="w-3.5 h-3.5 rounded-full bg-green-500 lamp-off transition-all"></div>
+                            <div id="lamp-S-Y" class="w-3.5 h-3.5 rounded-full bg-yellow-500 lamp-off transition-all"></div>
+                            <div id="lamp-S-R" class="w-3.5 h-3.5 rounded-full bg-red-500 lamp-red-on transition-all"></div>
+                        </div>
+                    </div>
+
+                    <!-- 4. BARAT (Sudut Kiri-Bawah, sebelum garis henti x=30.4%) -->
+                    <div class="absolute bottom-[32.5%] left-[29.5%] -translate-x-full translate-y-full flex flex-col items-end z-20">
+                        <div class="bg-slate-900 border border-slate-700 p-1.5 rounded-xl shadow-xl flex space-x-1.5 relative">
+                            <div class="w-1 h-2.5 bg-slate-600 absolute right-2 -top-2.5 rounded-t"></div>
+                            <div id="lamp-W-R" class="w-3.5 h-3.5 rounded-full bg-red-500 lamp-red-on transition-all"></div>
+                            <div id="lamp-W-Y" class="w-3.5 h-3.5 rounded-full bg-yellow-500 lamp-off transition-all"></div>
+                            <div id="lamp-W-G" class="w-3.5 h-3.5 rounded-full bg-green-500 lamp-off transition-all"></div>
+                        </div>
+                        <span class="text-[9px] font-mono font-bold text-slate-300 bg-slate-900/90 px-1.5 py-0.5 rounded mt-1 border border-slate-700">BARAT (Q1.3-5)</span>
+                    </div>
+
                 </div>
-                <!-- Selatan -->
-                <div class="tl-box tl-south">
-                    <div class="lamp red" id="s-red"></div>
-                    <div class="lamp yellow" id="s-yellow"></div>
-                    <div class="lamp green" id="s-green"></div>
-                </div>
-                <!-- Barat -->
-                <div class="tl-box tl-west">
-                    <div class="lamp red" id="w-red"></div>
-                    <div class="lamp yellow" id="w-yellow"></div>
-                    <div class="lamp green" id="w-green"></div>
+
+                <!-- Status Sensor Loop & Statistik -->
+                <div class="mt-3 pt-3 border-t border-slate-800/80 flex flex-wrap justify-between items-center gap-2 text-xs font-mono">
+                    <div class="flex items-center space-x-2 text-slate-400">
+                        <span>Loop Sensor:</span>
+                        <span id="ind-I02" class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-500">I0.2(N)</span>
+                        <span id="ind-I03" class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-500">I0.3(E)</span>
+                        <span id="ind-I04" class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-500">I0.4(S)</span>
+                        <span id="ind-I05" class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-500">I0.5(W)</span>
+                    </div>
+                    <div class="text-slate-400">
+                        Melintas: <span id="stat-passed" class="text-cyan-400 font-bold">0</span>
+                    </div>
                 </div>
             </div>
 
-            <div class="settings-box">
-                <div class="setting-item">
-                    <label for="greenTimeInput">Durasi Lampu Hijau (detik):</label>
-                    <input type="number" id="greenTimeInput" value="5" min="2" max="30">
+            <!-- Panel Kontrol Operator HMI -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xl space-y-4">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-200 flex items-center">
+                        <i class="fa-solid fa-gamepad text-cyan-400 mr-2"></i> HMI Pushbuttons & Timer Preset
+                    </h2>
+                    <span id="timer-readout" class="text-xs font-mono text-emerald-400 bg-slate-950 px-2.5 py-1 rounded border border-slate-800">
+                        T37: 0.0s / 5.0s
+                    </span>
                 </div>
-                <div class="setting-item">
-                    <label for="yellowTimeInput">Durasi Lampu Kuning (detik):</label>
-                    <input type="number" id="yellowTimeInput" value="2" min="1" max="10">
+
+                <!-- Tombol Kontrol PLC -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <button onclick="plcCommand('START')" class="bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold py-2.5 px-3 rounded-xl shadow-lg shadow-emerald-600/20 transition flex items-center justify-center space-x-2 border border-emerald-400/50 cursor-pointer text-xs sm:text-sm">
+                        <i class="fa-solid fa-play"></i>
+                        <span>START (I0.0)</span>
+                    </button>
+                    <button onclick="plcCommand('STOP')" class="bg-rose-600 hover:bg-rose-500 active:scale-95 text-white font-bold py-2.5 px-3 rounded-xl shadow-lg shadow-rose-600/20 transition flex items-center justify-center space-x-2 border border-rose-400/50 cursor-pointer text-xs sm:text-sm">
+                        <i class="fa-solid fa-stop"></i>
+                        <span>STOP (I0.1)</span>
+                    </button>
+                    <button onclick="plcCommand('NIGHT')" id="btn-night" class="bg-amber-600 hover:bg-amber-500 active:scale-95 text-white font-bold py-2.5 px-3 rounded-xl shadow-lg shadow-amber-600/20 transition flex items-center justify-center space-x-2 border border-amber-400/50 cursor-pointer text-xs sm:text-sm">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                        <span>FLASH (I0.6)</span>
+                    </button>
+                    <button onclick="plcCommand('RESET')" class="bg-slate-700 hover:bg-slate-600 active:scale-95 text-white font-bold py-2.5 px-3 rounded-xl transition flex items-center justify-center space-x-2 border border-slate-600 cursor-pointer text-xs sm:text-sm">
+                        <i class="fa-solid fa-rotate-left"></i>
+                        <span>RESET</span>
+                    </button>
+                </div>
+
+                <!-- Pengaturan Preset Timer TON -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-950 p-3.5 rounded-xl border border-slate-800">
+                    <div>
+                        <div class="flex justify-between text-xs mb-1">
+                            <span class="text-slate-400">Timer Hijau (T37 PT):</span>
+                            <span id="lbl-pt-green" class="font-mono font-bold text-emerald-400">5.0 s</span>
+                        </div>
+                        <input type="range" id="slider-pt-green" min="3" max="12" step="1" value="5" oninput="updatePresets()" class="w-full accent-emerald-500 cursor-pointer">
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-xs mb-1">
+                            <span class="text-slate-400">Timer Kuning (T38 PT):</span>
+                            <span id="lbl-pt-yellow" class="font-mono font-bold text-amber-400">2.0 s</span>
+                        </div>
+                        <input type="range" id="slider-pt-yellow" min="1" max="5" step="1" value="2" oninput="updatePresets()" class="w-full accent-amber-500 cursor-pointer">
+                    </div>
                 </div>
             </div>
+
         </div>
 
-        <!-- Kolom Kanan: Panel Kontrol & PLC Status / Ladder Logic -->
-        <div class="panel">
-            <h2>Panel Kontrol PLC</h2>
-            
-            <div class="controls-grid">
-                <button class="btn btn-start" onclick="startPLC()">START SYSTEM</button>
-                <button class="btn btn-stop" onclick="stopPLC()">STOP SYSTEM</button>
-                <button class="btn btn-emergency" onclick="toggleEmergency()">EMERGENCY OVERRIDE (ALL RED)</button>
+        <!-- KOLOM KANAN: Live PLC Ladder Logic & Data Block Monitor (5 Kolom) -->
+        <div class="lg:col-span-5 flex flex-col space-y-5">
+
+            <!-- Tab Switcher -->
+            <div class="flex bg-slate-900 border border-slate-800 p-1 rounded-xl">
+                <button onclick="switchTab('ladder')" id="tab-ladder" class="flex-1 py-2 text-xs font-bold rounded-lg bg-cyan-600 text-white transition cursor-pointer">
+                    <i class="fa-solid fa-diagram-project mr-1.5"></i> Live Ladder
+                </button>
+                <button onclick="switchTab('watch')" id="tab-watch" class="flex-1 py-2 text-xs font-bold rounded-lg text-slate-400 hover:text-white transition cursor-pointer">
+                    <i class="fa-solid fa-memory mr-1.5"></i> Watch Table (I/Q/M)
+                </button>
             </div>
 
-            <div class="plc-status">
-                <div class="status-row">
-                    <span class="status-label">PLC Scan Cycle:</span>
-                    <span class="status-val active" id="scanStatus">OK (10ms)</span>
+            <!-- PANEL 1: Live Ladder Diagram dengan Power Flow Real-time -->
+            <div id="panel-ladder" class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl flex flex-col space-y-3 font-mono text-[11px]">
+                <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+                    <span class="font-bold text-slate-200 uppercase">OB1: Main Traffic Program</span>
+                    <span class="text-[10px] text-emerald-400 flex items-center">
+                        <span class="w-2 h-2 rounded-full bg-emerald-400 mr-1.5 animate-ping"></span> Online Monitoring
+                    </span>
                 </div>
-                <div class="status-row">
-                    <span class="status-label">Current Step / State:</span>
-                    <span class="status-val" id="stepStatus">Step 1 (Utara Hijau)</span>
-                </div>
-                <div class="status-row">
-                    <span class="status-label">Active Timer (T4:0):</span>
-                    <span class="status-val" id="timerStatus">0s / 5s</span>
-                </div>
-                <div class="status-row">
-                    <span class="status-label">Emergency Mode:</span>
-                    <span class="status-val inactive" id="emergencyStatus">OFF</span>
+
+                <div class="space-y-3 max-h-[540px] overflow-y-auto pr-1">
+
+                    <!-- Network 1: Master Run Latch -->
+                    <div class="bg-slate-950 border border-slate-800 rounded-xl p-3">
+                        <div class="text-[10px] text-slate-400 mb-2 font-sans font-semibold">Network 1: Master System Latch (M0.0)</div>
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-1.5">
+                                <span id="ld-I00" class="px-2 py-1 rounded border border-slate-700 text-slate-400">--| I0.0 |--</span>
+                                <span id="ld-I01" class="px-2 py-1 rounded border border-slate-700 text-slate-400">--|/ I0.1|--</span>
+                            </div>
+                            <div class="flex-1 h-0.5 bg-slate-800 mx-2" id="wire-net1"></div>
+                            <span id="ld-M00" class="px-2 py-1 rounded border border-slate-700 text-slate-400 font-bold">--( M0.0 )--</span>
+                        </div>
+                    </div>
+
+                    <!-- Network 2: Sequencer Timer TON -->
+                    <div class="bg-slate-950 border border-slate-800 rounded-xl p-3">
+                        <div class="text-[10px] text-slate-400 mb-2 font-sans font-semibold">Network 2: Step Timer (TON) & Step Counter (MW2)</div>
+                        <div class="flex items-center justify-between">
+                            <span id="ld-T-in" class="px-2 py-1 rounded border border-slate-700 text-slate-400">--| M0.0 |--</span>
+                            <div class="flex-1 h-0.5 bg-slate-800 mx-2" id="wire-net2"></div>
+                            <div id="ld-TON" class="px-2.5 py-1.5 rounded border border-slate-700 text-slate-300 text-center">
+                                <div class="text-[9px] text-cyan-400 font-bold">TON TIMER</div>
+                                <div>ET: <span id="ld-et">0.0s</span></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Network 3: North Lights -->
+                    <div class="bg-slate-950 border border-slate-800 rounded-xl p-3 space-y-2">
+                        <div class="text-[10px] text-slate-400 font-sans font-semibold">Network 3: Arah Utara (Q0.0 = R, Q0.1 = Y, Q0.2 = G)</div>
+                        <div class="flex items-center justify-between">
+                            <span id="ld-N-G-c" class="px-2 py-0.5 rounded border border-slate-700 text-slate-400">MW2 == 1</span>
+                            <div class="flex-1 h-0.5 bg-slate-800 mx-2"></div>
+                            <span id="ld-Q02" class="px-2 py-0.5 rounded border border-slate-700 text-slate-400">--( Q0.2 GRN )--</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span id="ld-N-Y-c" class="px-2 py-0.5 rounded border border-slate-700 text-slate-400">MW2 == 2</span>
+                            <div class="flex-1 h-0.5 bg-slate-800 mx-2"></div>
+                            <span id="ld-Q01" class="px-2 py-0.5 rounded border border-slate-700 text-slate-400">--( Q0.1 YEL )--</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span id="ld-N-R-c" class="px-2 py-0.5 rounded border border-slate-700 text-slate-400">!Q0.2 & !Q0.1</span>
+                            <div class="flex-1 h-0.5 bg-slate-800 mx-2"></div>
+                            <span id="ld-Q00" class="px-2 py-0.5 rounded border border-slate-700 text-slate-400">--( Q0.0 RED )--</span>
+                        </div>
+                    </div>
+
+                    <!-- Network 4: East Lights -->
+                    <div class="bg-slate-950 border border-slate-800 rounded-xl p-3 space-y-2">
+                        <div class="text-[10px] text-slate-400 font-sans font-semibold">Network 4: Arah Timur (Q0.3 = R, Q0.4 = Y, Q0.5 = G)</div>
+                        <div class="flex items-center justify-between">
+                            <span id="ld-E-G-c" class="px-2 py-0.5 rounded border border-slate-700 text-slate-400">MW2 == 3</span>
+                            <div class="flex-1 h-0.5 bg-slate-800 mx-2"></div>
+                            <span id="ld-Q05" class="px-2 py-0.5 rounded border border-slate-700 text-slate-400">--( Q0.5 GRN )--</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span id="ld-E-Y-c" class="px-2 py-0.5 rounded border border-slate-700 text-slate-400">MW2 == 4</span>
+                            <div class="flex-1 h-0.5 bg-slate-800 mx-2"></div>
+                            <span id="ld-Q04" class="px-2 py-0.5 rounded border border-slate-700 text-slate-400">--( Q0.4 YEL )--</span>
+                        </div>
+                    </div>
+
+                    <!-- Network 5: South Lights -->
+                    <div class="bg-slate-950 border border-slate-800 rounded-xl p-3 space-y-2">
+                        <div class="text-[10px] text-slate-400 font-sans font-semibold">Network 5: Arah Selatan (Q1.0 = R, Q1.1 = Y, Q1.2 = G)</div>
+                        <div class="flex items-center justify-between">
+                            <span id="ld-S-G-c" class="px-2 py-0.5 rounded border border-slate-700 text-slate-400">MW2 == 5</span>
+                            <div class="flex-1 h-0.5 bg-slate-800 mx-2"></div>
+                            <span id="ld-Q12" class="px-2 py-0.5 rounded border border-slate-700 text-slate-400">--( Q1.2 GRN )--</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span id="ld-S-Y-c" class="px-2 py-0.5 rounded border border-slate-700 text-slate-400">MW2 == 6</span>
+                            <div class="flex-1 h-0.5 bg-slate-800 mx-2"></div>
+                            <span id="ld-Q11" class="px-2 py-0.5 rounded border border-slate-700 text-slate-400">--( Q1.1 YEL )--</span>
+                        </div>
+                    </div>
+
+                    <!-- Network 6: West Lights -->
+                    <div class="bg-slate-950 border border-slate-800 rounded-xl p-3 space-y-2">
+                        <div class="text-[10px] text-slate-400 font-sans font-semibold">Network 6: Arah Barat (Q1.3 = R, Q1.4 = Y, Q1.5 = G)</div>
+                        <div class="flex items-center justify-between">
+                            <span id="ld-W-G-c" class="px-2 py-0.5 rounded border border-slate-700 text-slate-400">MW2 == 7</span>
+                            <div class="flex-1 h-0.5 bg-slate-800 mx-2"></div>
+                            <span id="ld-Q15" class="px-2 py-0.5 rounded border border-slate-700 text-slate-400">--( Q1.5 GRN )--</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span id="ld-W-Y-c" class="px-2 py-0.5 rounded border border-slate-700 text-slate-400">MW2 == 8</span>
+                            <div class="flex-1 h-0.5 bg-slate-800 mx-2"></div>
+                            <span id="ld-Q14" class="px-2 py-0.5 rounded border border-slate-700 text-slate-400">--( Q1.4 YEL )--</span>
+                        </div>
+                    </div>
+
                 </div>
             </div>
 
-            <div class="ladder-viewer">
-                <div class="ladder-title">Simulasi Ladder Diagram (PLC Logika)</div>
-                <div class="rung" id="ladderRung1">|---[ I:0/0 ]---[ / ]---( STEP 1: UTARA HIJAU )---|</div>
-                <div class="rung" id="ladderRung2">|---[ T4:0  ]---[ / ]---( STEP 2: TIMUR HIJAU  )---|</div>
-                <div class="rung" id="ladderRung3">|---[ T4:1  ]---[ / ]---( STEP 3: SELATAN HIJAU)---|</div>
-                <div class="rung" id="ladderRung4">|---[ T4:2  ]---[ / ]---( STEP 4: BARAT HIJAU  )---|</div>
+            <!-- PANEL 2: PLC Memory Watch Table -->
+            <div id="panel-watch" class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl hidden flex-col space-y-3">
+                <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+                    <span class="text-xs font-bold text-slate-200 uppercase">PLC Tag & Memory Watch Table</span>
+                    <span class="text-[10px] font-mono text-cyan-400">Auto-Refresh</span>
+                </div>
+                <div class="overflow-x-auto max-h-[520px]">
+                    <table class="w-full text-left font-mono text-xs">
+                        <thead>
+                            <tr class="text-slate-400 border-b border-slate-800">
+                                <th class="py-2 px-2">Address</th>
+                                <th class="py-2 px-2">Tag Name</th>
+                                <th class="py-2 px-2">Value</th>
+                            </tr>
+                        </thead>
+                        <tbody id="watch-table-body" class="divide-y divide-slate-800/60"></tbody>
+                    </table>
+                </div>
             </div>
+
         </div>
-    </div>
+    </main>
 
+    <!-- Single-File Embedded PLC Runtime & Physics Engine -->
     <script>
-        // PLC State Variables
-        let isRunning = true;
-        let isEmergency = false;
-        let currentStep = 0; // 0: Utara, 1: UtaraKuning, 2: Timur, 3: TimurKuning, 4: Selatan, 5: SelatanKuning, 6: Barat, 7: BaratKuning
-        let timerCounter = 0;
-        let timerInterval = null;
+        /**
+         * ============================================================================
+         * BAGIAN 1: VIRTUAL PLC RUNTIME ENGINE (IEC 61131-3 CYCLIC SCAN)
+         * ============================================================================
+         * PLC mengeksekusi 3 fase setiap siklus scan (10ms):
+         * 1. Input Scan: Membaca tombol HMI dan sensor loop jalan raya ke Process Image Input (I).
+         * 2. Program Execution: Mengevaluasi Ladder Logic, Timer TON, dan State Machine (MW2).
+         * 3. Output Update: Menulis hasil logika ke Process Image Output (Q) untuk menyalakan lampu.
+         */
+        const PLC = {
+            // Process Image Inputs (I)
+            I: {
+                'I0.0': false, // PB_START (NO)
+                'I0.1': true,  // PB_STOP (NC - True saat tidak ditekan)
+                'I0.2': false, // SENSOR_NORTH
+                'I0.3': false, // SENSOR_EAST
+                'I0.4': false, // SENSOR_SOUTH
+                'I0.5': false, // SENSOR_WEST
+                'I0.6': false, // SW_NIGHT_FLASH (Mode Kuning Berkedip)
+            },
+            // Internal Memory Bits & Words (M)
+            M: {
+                'M0.0': false, // SYS_RUN_LATCH
+                'M0.1': false, // CLOCK_1HZ (Blink bit untuk mode malam)
+                'MW2': 0,      // STEP_SEQ (0=Safe, 1=N_G, 2=N_Y, 3=E_G, 4=E_Y, 5=S_G, 6=S_Y, 7=W_G, 8=W_Y)
+            },
+            // Timers (TON)
+            T: {
+                PT_GREEN: 5000,  // Preset Hijau (ms)
+                PT_YELLOW: 2000, // Preset Kuning (ms)
+                ET: 0,           // Elapsed Time (ms)
+                BLINK_ET: 0
+            },
+            // Process Image Outputs (Q)
+            Q: {
+                'Q0.0': true,  'Q0.1': false, 'Q0.2': false, // Utara: R, Y, G
+                'Q0.3': true,  'Q0.4': false, 'Q0.5': false, // Timur: R, Y, G
+                'Q1.0': true,  'Q1.1': false, 'Q1.2': false, // Selatan: R, Y, G
+                'Q1.3': true,  'Q1.4': false, 'Q1.5': false, // Barat: R, Y, G
+            },
 
-        // Mendapatkan referensi elemen lampu
-        const lights = {
-            north: { red: document.getElementById('n-red'), yellow: document.getElementById('n-yellow'), green: document.getElementById('n-green') },
-            east:  { red: document.getElementById('e-red'), yellow: document.getElementById('e-yellow'), green: document.getElementById('e-green') },
-            south: { red: document.getElementById('s-red'), yellow: document.getElementById('s-yellow'), green: document.getElementById('s-green') },
-            west:  { red: document.getElementById('w-red'), yellow: document.getElementById('w-yellow'), green: document.getElementById('w-green') }
+            // Siklus Scan Utama PLC (Dipanggil setiap 10ms)
+            scanCycle(deltaMs) {
+                // --- FASE 1: INPUT SCAN (Baca Sensor Loop Kendaraan) ---
+                this.I['I0.2'] = checkLoopSensor('NORTH');
+                this.I['I0.3'] = checkLoopSensor('EAST');
+                this.I['I0.4'] = checkLoopSensor('SOUTH');
+                this.I['I0.5'] = checkLoopSensor('WEST');
+
+                // --- FASE 2: PROGRAM EXECUTION (LADDER LOGIC) ---
+                // Network 1: Master Latch (Start / Stop)
+                if (this.I['I0.0'] && this.I['I0.1']) {
+                    this.M['M0.0'] = true;
+                }
+                if (!this.I['I0.1']) {
+                    this.M['M0.0'] = false;
+                }
+
+                // Internal 1Hz Clock Pulse (500ms ON / 500ms OFF)
+                this.T.BLINK_ET += deltaMs;
+                if (this.T.BLINK_ET >= 500) {
+                    this.T.BLINK_ET = 0;
+                    this.M['M0.1'] = !this.M['M0.1'];
+                }
+
+                // Network 2: Sequencer & Timer TON
+                if (!this.M['M0.0']) {
+                    this.M['MW2'] = 0;
+                    this.T.ET = 0;
+                } else if (this.I['I0.6']) {
+                    // Mode Caution / Night Flash
+                    this.M['MW2'] = 99;
+                    this.T.ET = 0;
+                } else {
+                    if (this.M['MW2'] === 0 || this.M['MW2'] === 99) {
+                        this.M['MW2'] = 1; // Mulai dari Utara Hijau
+                        this.T.ET = 0;
+                    }
+
+                    const activePreset = (this.M['MW2'] % 2 === 1) ? this.T.PT_GREEN : this.T.PT_YELLOW;
+                    this.T.ET += deltaMs;
+
+                    if (this.T.ET >= activePreset) {
+                        this.T.ET = 0;
+                        this.M['MW2'] = (this.M['MW2'] >= 8) ? 1 : this.M['MW2'] + 1;
+                    }
+                }
+
+                // --- FASE 3: OUTPUT UPDATE (INTERLOCKING SAFETY) ---
+                const step = this.M['MW2'];
+                const blink = this.M['M0.1'];
+
+                if (step === 99) {
+                    // Mode Kuning Berkedip Semua Arah
+                    this.Q['Q0.0'] = false; this.Q['Q0.1'] = blink; this.Q['Q0.2'] = false;
+                    this.Q['Q0.3'] = false; this.Q['Q0.4'] = blink; this.Q['Q0.5'] = false;
+                    this.Q['Q1.0'] = false; this.Q['Q1.1'] = blink; this.Q['Q1.2'] = false;
+                    this.Q['Q1.3'] = false; this.Q['Q1.4'] = blink; this.Q['Q1.5'] = false;
+                } else {
+                    // Utara
+                    this.Q['Q0.2'] = (step === 1);
+                    this.Q['Q0.1'] = (step === 2);
+                    this.Q['Q0.0'] = (!this.Q['Q0.2'] && !this.Q['Q0.1']);
+
+                    // Timur
+                    this.Q['Q0.5'] = (step === 3);
+                    this.Q['Q0.4'] = (step === 4);
+                    this.Q['Q0.3'] = (!this.Q['Q0.5'] && !this.Q['Q0.4']);
+
+                    // Selatan
+                    this.Q['Q1.2'] = (step === 5);
+                    this.Q['Q1.1'] = (step === 6);
+                    this.Q['Q1.0'] = (!this.Q['Q1.2'] && !this.Q['Q1.1']);
+
+                    // Barat
+                    this.Q['Q1.5'] = (step === 7);
+                    this.Q['Q1.4'] = (step === 8);
+                    this.Q['Q1.3'] = (!this.Q['Q1.5'] && !this.Q['Q1.4']);
+                }
+            }
         };
 
-        function setLightsState(activeDir, color) {
-            const dirs = ['north', 'east', 'south', 'west'];
-            dirs.forEach(dir => {
-                lights[dir].red.classList.remove('active');
-                lights[dir].yellow.classList.remove('active');
-                lights[dir].green.classList.remove('active');
+        /**
+         * ============================================================================
+         * BAGIAN 2: SIMULASI KENDARAAN & DETEKTOR LOOP (60 FPS)
+         * ============================================================================
+         */
+        const vehicles = [];
+        let passedCount = 0;
+        let carSeqId = 0;
 
-                if (dir === activeDir) {
-                    lights[dir][color].classList.add('active');
-                } else {
-                    // Semua arah lain menyala MERAH sesuai aturan satu hijau bergantian
-                    lights[dir].red.classList.add('active');
+        const CAR_PALETTE = [
+            { body: '#38bdf8', roof: '#0284c7' },
+            { body: '#fb7185', roof: '#e11d48' },
+            { body: '#fbbf24', roof: '#d97706' },
+            { body: '#a78bfa', roof: '#7c3aed' },
+            { body: '#34d399', roof: '#059669' },
+            { body: '#f1f5f9', roof: '#cbd5e1' }
+        ];
+
+        const LANES = {
+            NORTH: { lane: 42.5, start: -10, end: 112, stop: 26.0, sign: 1,  rot: 180, vert: true,  loopMin: 22, loopMax: 29 },
+            SOUTH: { lane: 57.5, start: 110, end: -12, stop: 74.0, sign: -1, rot: 0,   vert: true,  loopMin: 71, loopMax: 78 },
+            WEST:  { lane: 57.5, start: -10, end: 112, stop: 26.0, sign: 1,  rot: 90,  vert: false, loopMin: 22, loopMax: 29 },
+            EAST:  { lane: 42.5, start: 110, end: -12, stop: 74.0, sign: -1, rot: 270, vert: false, loopMin: 71, loopMax: 78 }
+        };
+
+        const spawnCooldown = { NORTH: 0.4, SOUTH: 1.1, WEST: 0.7, EAST: 1.5 };
+
+        function canProceed(dirKey) {
+            if (PLC.I['I0.6']) return true; // Saat mode flash kuning, kendaraan melaju hati-hati
+            if (dirKey === 'NORTH') return PLC.Q['Q0.2'];
+            if (dirKey === 'EAST')  return PLC.Q['Q0.5'];
+            if (dirKey === 'SOUTH') return PLC.Q['Q1.2'];
+            if (dirKey === 'WEST')  return PLC.Q['Q1.5'];
+            return false;
+        }
+
+        function checkLoopSensor(dirKey) {
+            const cfg = LANES[dirKey];
+            return vehicles.some(v => v.dir === dirKey && v.pos >= cfg.loopMin && v.pos <= cfg.loopMax);
+        }
+
+        function createCarDOM(palette) {
+            const div = document.createElement('div');
+            div.className = 'absolute w-[5.2%] h-[8.4%] will-change-transform';
+            div.innerHTML = `
+                <div class="car-beam absolute -top-[45%] left-[10%] w-[80%] h-[55%] rounded-full"></div>
+                <div class="absolute inset-0 translate-y-[6%] bg-black/50 rounded-[28%] blur-[1.5px]"></div>
+                <svg viewBox="0 0 40 68" class="w-full h-full relative z-10 overflow-visible">
+                    <rect x="-2" y="10" width="4" height="12" rx="1.5" fill="#090d16"/>
+                    <rect x="38" y="10" width="4" height="12" rx="1.5" fill="#090d16"/>
+                    <rect x="-2" y="46" width="4" height="12" rx="1.5" fill="#090d16"/>
+                    <rect x="38" y="46" width="4" height="12" rx="1.5" fill="#090d16"/>
+                    <rect x="2" y="2" width="36" height="64" rx="10" fill="${palette.body}" stroke="#0f172a" stroke-width="1.5"/>
+                    <path d="M 6 18 Q 20 13 34 18 L 31 27 Q 20 24 9 27 Z" fill="#0f172a" opacity="0.85"/>
+                    <rect x="8" y="26" width="24" height="22" rx="5" fill="${palette.roof}"/>
+                    <path d="M 9 48 Q 20 51 31 48 L 33 55 Q 20 58 7 55 Z" fill="#0f172a" opacity="0.85"/>
+                    <rect x="5" y="2" width="7" height="3" rx="1.5" fill="#fef08a"/>
+                    <rect x="28" y="2" width="7" height="3" rx="1.5" fill="#fef08a"/>
+                    <rect x="6" y="63" width="7" height="2.5" rx="1" fill="#7f1d1d" class="tail-lamp"/>
+                    <rect x="27" y="63" width="7" height="2.5" rx="1" fill="#7f1d1d" class="tail-lamp"/>
+                </svg>
+            `;
+            return div;
+        }
+
+        function spawnCar(dirKey) {
+            const cfg = LANES[dirKey];
+            const inLane = vehicles.filter(v => v.dir === dirKey);
+            if (inLane.length >= 4) return;
+            if (inLane.length > 0 && Math.abs(inLane[inLane.length - 1].pos - cfg.start) < 16) return;
+
+            const palette = CAR_PALETTE[Math.floor(Math.random() * CAR_PALETTE.length)];
+            const el = createCarDOM(palette);
+            document.getElementById('vehicles-container').appendChild(el);
+
+            const car = {
+                id: ++carSeqId,
+                dir: dirKey,
+                pos: cfg.start,
+                speed: 24,
+                maxSpeed: (PLC.I['I0.6'] ? 18 : 28) + Math.random() * 4,
+                el: el,
+                braking: false
+            };
+            vehicles.push(car);
+            renderCar(car);
+        }
+
+        function renderCar(car) {
+            const cfg = LANES[car.dir];
+            const x = cfg.vert ? cfg.lane : car.pos;
+            const y = cfg.vert ? car.pos : cfg.lane;
+            car.el.style.left = x + '%';
+            car.el.style.top = y + '%';
+            car.el.style.transform = `translate(-50%, -50%) rotate(${cfg.rot}deg)`;
+
+            const lamps = car.el.querySelectorAll('.tail-lamp');
+            lamps.forEach(l => l.setAttribute('fill', car.braking ? '#ff2a2a' : '#7f1d1d'));
+        }
+
+        function stepPhysics(dt) {
+            // Spawn kendaraan berkala
+            Object.keys(LANES).forEach(dirKey => {
+                spawnCooldown[dirKey] -= dt;
+                if (spawnCooldown[dirKey] <= 0) {
+                    spawnCar(dirKey);
+                    spawnCooldown[dirKey] = 2.0 + Math.random() * 2.2;
                 }
             });
-        }
 
-        function setAllRed() {
-            const dirs = ['north', 'east', 'south', 'west'];
-            dirs.forEach(dir => {
-                lights[dir].red.classList.add('active');
-                lights[dir].yellow.classList.remove('active');
-                lights[dir].green.classList.remove('active');
+            // Gerakkan kendaraan per jalur
+            Object.keys(LANES).forEach(dirKey => {
+                const cfg = LANES[dirKey];
+                const go = canProceed(dirKey);
+                const inLane = vehicles.filter(v => v.dir === dirKey);
+
+                for (let i = 0; i < inLane.length; i++) {
+                    const car = inLane[i];
+                    const baseMax = PLC.I['I0.6'] ? 17 : car.maxSpeed;
+                    let targetSpeed = baseMax;
+
+                    const distToStop = (cfg.stop - car.pos) * cfg.sign;
+
+                    if (!go && distToStop > -1.5) {
+                        if (distToStop <= 0.4) {
+                            targetSpeed = 0;
+                            car.pos = cfg.stop;
+                        } else if (distToStop < 16) {
+                            targetSpeed = Math.max(2.5, (distToStop / 16) * baseMax);
+                        }
+                    }
+
+                    if (i > 0) {
+                        const front = inLane[i - 1];
+                        const gap = (front.pos - car.pos) * cfg.sign;
+                        const minGap = 11.5;
+                        if (gap <= minGap) {
+                            targetSpeed = 0;
+                            car.pos = front.pos - (minGap * cfg.sign);
+                        } else if (gap < minGap + 12) {
+                            targetSpeed = Math.min(targetSpeed, ((gap - minGap) / 12) * baseMax);
+                        }
+                    }
+
+                    if (car.speed < targetSpeed) {
+                        car.speed = Math.min(targetSpeed, car.speed + 40 * dt);
+                        car.braking = false;
+                    } else if (car.speed > targetSpeed) {
+                        car.speed = Math.max(targetSpeed, car.speed - 68 * dt);
+                        car.braking = true;
+                    } else {
+                        car.braking = (car.speed === 0);
+                    }
+
+                    car.pos += car.speed * cfg.sign * dt;
+                    renderCar(car);
+                }
             });
-        }
 
-        function updatePLC() {
-            if (!isRunning) return;
-
-            if (isEmergency) {
-                setAllRed();
-                document.getElementById('emergencyStatusinnerText = "ACTIVE";');
-                document.getElementById('emergencyStatus').className = "status-val inactive";
-                document.getElementById('emergencyStatus').innerText = "ON (ALL RED)";
-                return;
-            } else {
-                document.getElementById('emergencyStatus').className = "status-val active";
-                document.getElementById('emergencyStatus').innerText = "OFF";
-            }
-
-            const greenTime = parseInt(document.getElementById('greenTimeInput').value) || 5;
-            const yellowTime = parseInt(document.getElementById('yellowTimeInput').value) || 2;
-
-            timerCounter++;
-
-            // Step Sequencing PLC
-            let limit = (currentStep % 2 === 0) ? greenTime : yellowTime;
-            
-            let activeDir = '';
-            let colorState = '';
-            let stepDesc = '';
-
-            switch(currentStep) {
-                case 0: activeDir = 'north'; colorState = 'green'; stepDesc = 'Step 1: Utara Hijau'; break;
-                case 1: activeDir = 'north'; colorState = 'yellow'; stepDesc = 'Step 2: Utara Kuning'; break;
-                case 2: activeDir = 'east'; colorState = 'green'; stepDesc = 'Step 3: Timur Hijau'; break;
-                case 3: activeDir = 'east'; colorState = 'yellow'; stepDesc = 'Step 4: Timur Kuning'; break;
-                case 4: activeDir = 'south'; colorState = 'green'; stepDesc = 'Step 5: Selatan Hijau'; break;
-                case 5: activeDir = 'south'; colorState = 'yellow'; stepDesc = 'Step 6: Selatan Kuning'; break;
-                case 6: activeDir = 'west'; colorState = 'green'; stepDesc = 'Step 7: Barat Hijau'; break;
-                case 7: activeDir = 'west'; colorState = 'yellow'; stepDesc = 'Step 8: Barat Kuning'; break;
-            }
-
-            setLightsState(activeDir, colorState);
-
-            // Update Status UI
-            document.getElementById('stepStatus').innerText = stepDesc;
-            document.getElementById('timerStatus').innerText = `${timerCounter}s / ${limit}s`;
-
-            // Update Ladder Visualizer highlight
-            updateLadderDisplay(currentStep);
-
-            if (timerCounter >= limit) {
-                timerCounter = 0;
-                currentStep = (currentStep + 1) % 8;
+            // Hapus mobil yang melewati batas layar
+            for (let i = vehicles.length - 1; i >= 0; i--) {
+                const car = vehicles[i];
+                const cfg = LANES[car.dir];
+                if ((cfg.sign === 1 && car.pos > cfg.end) || (cfg.sign === -1 && car.pos < cfg.end)) {
+                    car.el.remove();
+                    vehicles.splice(i, 1);
+                    passedCount++;
+                    document.getElementById('stat-passed').innerText = passedCount;
+                }
             }
         }
 
-        function updateLadderDisplay(step) {
-            const rungs = [
-                document.getElementById('ladderRung1'),
-                document.getElementById('ladderRung2'),
-                document.getElementById('ladderRung3'),
-                document.getElementById('ladderRung4')
+        /**
+         * ============================================================================
+         * BAGIAN 3: HMI UI RENDERING & LADDER ONLINE MONITORING
+         * ============================================================================
+         */
+        const STEP_DESCRIPTIONS = {
+            0:  'STATE: M0 (ALL RED / SAFE)',
+            1:  'STEP 1: UTARA HIJAU (Q0.2)',
+            2:  'STEP 2: UTARA KUNING (Q0.1)',
+            3:  'STEP 3: TIMUR HIJAU (Q0.5)',
+            4:  'STEP 4: TIMUR KUNING (Q0.4)',
+            5:  'STEP 5: SELATAN HIJAU (Q1.2)',
+            6:  'STEP 6: SELATAN KUNING (Q1.1)',
+            7:  'STEP 7: BARAT HIJAU (Q1.5)',
+            8:  'STEP 8: BARAT KUNING (Q1.4)',
+            99: 'CAUTION: NIGHT FLASH MODE (I0.6)'
+        };
+
+        function plcCommand(cmd) {
+            if (cmd === 'START') {
+                PLC.I['I0.1'] = true;
+                PLC.I['I0.0'] = true;
+                setTimeout(() => { PLC.I['I0.0'] = false; }, 120); // Momentary Pushbutton
+            } else if (cmd === 'STOP') {
+                PLC.I['I0.1'] = false;
+                setTimeout(() => { PLC.I['I0.1'] = true; }, 120);
+            } else if (cmd === 'NIGHT') {
+                PLC.I['I0.6'] = !PLC.I['I0.6'];
+                const btn = document.getElementById('btn-night');
+                btn.classList.toggle('ring-2', PLC.I['I0.6']);
+                btn.classList.toggle('ring-amber-300', PLC.I['I0.6']);
+            } else if (cmd === 'RESET') {
+                PLC.I['I0.1'] = false;
+                PLC.I['I0.6'] = false;
+                PLC.M['M0.0'] = false;
+                PLC.M['MW2'] = 0;
+                PLC.T.ET = 0;
+                document.getElementById('btn-night').classList.remove('ring-2', 'ring-amber-300');
+                setTimeout(() => { PLC.I['I0.1'] = true; }, 100);
+
+                while (vehicles.length) vehicles.pop().el.remove();
+                passedCount = 0;
+                document.getElementById('stat-passed').innerText = '0';
+                ['NORTH', 'EAST', 'SOUTH', 'WEST'].forEach(d => spawnCar(d));
+            }
+        }
+
+        function updatePresets() {
+            const g = parseInt(document.getElementById('slider-pt-green').value);
+            const y = parseInt(document.getElementById('slider-pt-yellow').value);
+            PLC.T.PT_GREEN = g * 1000;
+            PLC.T.PT_YELLOW = y * 1000;
+            document.getElementById('lbl-pt-green').innerText = g.toFixed(1) + ' s';
+            document.getElementById('lbl-pt-yellow').innerText = y.toFixed(1) + ' s';
+        }
+
+        function switchTab(tab) {
+            document.getElementById('panel-ladder').classList.toggle('hidden', tab !== 'ladder');
+            document.getElementById('panel-watch').classList.toggle('hidden', tab !== 'watch');
+            document.getElementById('panel-watch').classList.toggle('flex', tab === 'watch');
+
+            document.getElementById('tab-ladder').className = tab === 'ladder'
+                ? 'flex-1 py-2 text-xs font-bold rounded-lg bg-cyan-600 text-white transition cursor-pointer'
+                : 'flex-1 py-2 text-xs font-bold rounded-lg text-slate-400 hover:text-white transition cursor-pointer';
+            document.getElementById('tab-watch').className = tab === 'watch'
+                ? 'flex-1 py-2 text-xs font-bold rounded-lg bg-cyan-600 text-white transition cursor-pointer'
+                : 'flex-1 py-2 text-xs font-bold rounded-lg text-slate-400 hover:text-white transition cursor-pointer';
+        }
+
+        function setLamp(id, on, colorClass) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.className = `w-3.5 h-3.5 rounded-full transition-all duration-150 ${on ? colorClass : 'bg-slate-700 lamp-off'}`;
+        }
+
+        function setLadderState(id, active, isCoil = false) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.classList.toggle(isCoil ? 'coil-on' : 'contact-on', active);
+        }
+
+        function syncHMI() {
+            // 1. Update CPU LEDs
+            const run = PLC.M['M0.0'];
+            document.getElementById('cpu-led-run').className = run
+                ? 'w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]'
+                : 'w-2.5 h-2.5 rounded-full bg-slate-700';
+            document.getElementById('cpu-led-stop').className = !run
+                ? 'w-2.5 h-2.5 rounded-full bg-amber-500 shadow-[0_0_8px_#f59e0b]'
+                : 'w-2.5 h-2.5 rounded-full bg-slate-700';
+
+            // 2. Update Lampu Persimpangan
+            setLamp('lamp-N-R', PLC.Q['Q0.0'], 'lamp-red-on');
+            setLamp('lamp-N-Y', PLC.Q['Q0.1'], 'lamp-yellow-on');
+            setLamp('lamp-N-G', PLC.Q['Q0.2'], 'lamp-green-on');
+
+            setLamp('lamp-E-R', PLC.Q['Q0.3'], 'lamp-red-on');
+            setLamp('lamp-E-Y', PLC.Q['Q0.4'], 'lamp-yellow-on');
+            setLamp('lamp-E-G', PLC.Q['Q0.5'], 'lamp-green-on');
+
+            setLamp('lamp-S-R', PLC.Q['Q1.0'], 'lamp-red-on');
+            setLamp('lamp-S-Y', PLC.Q['Q1.1'], 'lamp-yellow-on');
+            setLamp('lamp-S-G', PLC.Q['Q1.2'], 'lamp-green-on');
+
+            setLamp('lamp-W-R', PLC.Q['Q1.3'], 'lamp-red-on');
+            setLamp('lamp-W-Y', PLC.Q['Q1.4'], 'lamp-yellow-on');
+            setLamp('lamp-W-G', PLC.Q['Q1.5'], 'lamp-green-on');
+
+            // 3. Update Indikator Loop Sensor
+            ['I0.2', 'I0.3', 'I0.4', 'I0.5'].forEach(addr => {
+                const el = document.getElementById('ind-' + addr.replace('.', ''));
+                const active = PLC.I[addr];
+                el.className = active
+                    ? 'px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-bold'
+                    : 'px-1.5 py-0.5 rounded bg-slate-800 text-slate-500';
+            });
+
+            // 4. Update Status Step & Timer
+            const step = PLC.M['MW2'];
+            document.getElementById('active-step-badge').innerText = STEP_DESCRIPTIONS[step] || 'UNKNOWN';
+
+            const activePT = (step % 2 === 1 && step !== 99) ? PLC.T.PT_GREEN : PLC.T.PT_YELLOW;
+            const etSec = (PLC.T.ET / 1000).toFixed(1);
+            const ptSec = (activePT / 1000).toFixed(1);
+            document.getElementById('timer-readout').innerText = `TON: ${etSec}s / ${ptSec}s`;
+            document.getElementById('ld-et').innerText = `${etSec}s`;
+
+            // 5. Update Live Ladder Diagram Power Flow
+            setLadderState('ld-I00', PLC.I['I0.0']);
+            setLadderState('ld-I01', PLC.I['I0.1']);
+            setLadderState('ld-M00', run, true);
+            setLadderState('ld-T-in', run);
+            setLadderState('ld-TON', run && step !== 99, true);
+
+            setLadderState('ld-N-G-c', step === 1); setLadderState('ld-Q02', PLC.Q['Q0.2'], true);
+            setLadderState('ld-N-Y-c', step === 2); setLadderState('ld-Q01', PLC.Q['Q0.1'], true);
+            setLadderState('ld-N-R-c', PLC.Q['Q0.0']); setLadderState('ld-Q00', PLC.Q['Q0.0'], true);
+
+            setLadderState('ld-E-G-c', step === 3); setLadderState('ld-Q05', PLC.Q['Q0.5'], true);
+            setLadderState('ld-E-Y-c', step === 4); setLadderState('ld-Q04', PLC.Q['Q0.4'], true);
+
+            setLadderState('ld-S-G-c', step === 5); setLadderState('ld-Q12', PLC.Q['Q1.2'], true);
+            setLadderState('ld-S-Y-c', step === 6); setLadderState('ld-Q11', PLC.Q['Q1.1'], true);
+
+            setLadderState('ld-W-G-c', step === 7); setLadderState('ld-Q15', PLC.Q['Q1.5'], true);
+            setLadderState('ld-W-Y-c', step === 8); setLadderState('ld-Q14', PLC.Q['Q1.4'], true);
+
+            // 6. Update Watch Table jika terbuka
+            if (!document.getElementById('panel-watch').classList.contains('hidden')) {
+                renderWatchTable();
+            }
+        }
+
+        function renderWatchTable() {
+            const tags = [
+                { addr: 'I0.0', name: 'PB_START', val: PLC.I['I0.0'] },
+                { addr: 'I0.1', name: 'PB_STOP_NC', val: PLC.I['I0.1'] },
+                { addr: 'I0.2', name: 'LOOP_NORTH', val: PLC.I['I0.2'] },
+                { addr: 'I0.3', name: 'LOOP_EAST', val: PLC.I['I0.3'] },
+                { addr: 'I0.4', name: 'LOOP_SOUTH', val: PLC.I['I0.4'] },
+                { addr: 'I0.5', name: 'LOOP_WEST', val: PLC.I['I0.5'] },
+                { addr: 'I0.6', name: 'SW_NIGHT_FLASH', val: PLC.I['I0.6'] },
+                { addr: 'M0.0', name: 'SYS_RUN_LATCH', val: PLC.M['M0.0'] },
+                { addr: 'MW2',  name: 'SEQ_STEP_WORD', val: PLC.M['MW2'], isWord: true },
+                { addr: 'Q0.0', name: 'LAMP_N_RED', val: PLC.Q['Q0.0'] },
+                { addr: 'Q0.1', name: 'LAMP_N_YEL', val: PLC.Q['Q0.1'] },
+                { addr: 'Q0.2', name: 'LAMP_N_GRN', val: PLC.Q['Q0.2'] },
+                { addr: 'Q0.3', name: 'LAMP_E_RED', val: PLC.Q['Q0.3'] },
+                { addr: 'Q0.4', name: 'LAMP_E_YEL', val: PLC.Q['Q0.4'] },
+                { addr: 'Q0.5', name: 'LAMP_E_GRN', val: PLC.Q['Q0.5'] },
+                { addr: 'Q1.0', name: 'LAMP_S_RED', val: PLC.Q['Q1.0'] },
+                { addr: 'Q1.1', name: 'LAMP_S_YEL', val: PLC.Q['Q1.1'] },
+                { addr: 'Q1.2', name: 'LAMP_S_GRN', val: PLC.Q['Q1.2'] },
+                { addr: 'Q1.3', name: 'LAMP_W_RED', val: PLC.Q['Q1.3'] },
+                { addr: 'Q1.4', name: 'LAMP_W_YEL', val: PLC.Q['Q1.4'] },
+                { addr: 'Q1.5', name: 'LAMP_W_GRN', val: PLC.Q['Q1.5'] },
             ];
 
-            // Reset rungs highlight
-            rungs[0].innerHTML = `|---[ I:0/0 ]---[ Step 1-2 ]---( UTARA <span id="r1">${step===0||step===1?'ACTIVE':'IDLE'}</span> )---|`;
-            rungs[1].innerHTML = `|---[ I:0/0 ]---[ Step 3-4 ]---( TIMUR  <span id="r2">${step===2||step===3?'ACTIVE':'IDLE'}</span> )---|`;
-            rungs[2].innerHTML = `|---[ I:0/0 ]---[ Step 5-6 ]---( SELATAN<span id="r3">${step===4||step===5?'ACTIVE':'IDLE'}</span> )---|`;
-            rungs[3].innerHTML = `|---[ I:0/0 ]---[ Step 7-8 ]---( BARAT  <span id="r4">${step===6||step===7?'ACTIVE':'IDLE'}</span> )---|`;
+            document.getElementById('watch-table-body').innerHTML = tags.map(t => `
+                <tr>
+                    <td class="py-1.5 px-2 text-cyan-400 font-bold">${t.addr}</td>
+                    <td class="py-1.5 px-2 text-slate-300">${t.name}</td>
+                    <td class="py-1.5 px-2">
+                        ${t.isWord
+                            ? `<span class="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 font-bold">${t.val}</span>`
+                            : `<span class="px-2 py-0.5 rounded font-bold ${t.val ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-500'}">${t.val ? 'TRUE (1)' : 'FALSE (0)'}</span>`
+                        }
+                    </td>
+                </tr>
+            `).join('');
         }
 
-        function startPLC() {
-            if (!isRunning) {
-                isRunning = true;
-                document.getElementById('activeStateLabel').innerText = "Status: RUNNING";
-                document.getElementById('activeStateLabel').style.color = "var(--success)";
+        // Main Loop (Menggabungkan PLC Scan 10ms & Animasi 60fps)
+        let lastTime = performance.now();
+        let scanAccumulator = 0;
+
+        function mainLoop(now) {
+            const dtMs = Math.min(now - lastTime, 50);
+            lastTime = now;
+
+            // Eksekusi PLC Cyclic Scan setiap 10ms
+            scanAccumulator += dtMs;
+            while (scanAccumulator >= 10) {
+                PLC.scanCycle(10);
+                scanAccumulator -= 10;
             }
+
+            // Update Fisika Kendaraan & Tampilan HMI
+            stepPhysics(dtMs / 1000);
+            syncHMI();
+
+            requestAnimationFrame(mainLoop);
         }
 
-        function stopPLC() {
-            isRunning = false;
-            setAllRed();
-            document.getElementById('activeStateLabel').innerText = "Status: STOPPED";
-            document.getElementById('activeStateLabel').style.color = "var(--danger)";
-            document.getElementById('stepStatus').innerText = "PLC Stopped";
-        }
-
-        function toggleEmergency() {
-            isEmergency = !isEmergency;
-        }
-
-        // Mulai timer PLC setiap 1 detik
-        if (timerInterval) clearInterval(timerInterval);
-        timerInterval = setInterval(updatePLC, 1000);
-        
-        // Inisialisasi awal
-        setLightsState('north', 'green');
+        // Boot Aplikasi
+        window.addEventListener('DOMContentLoaded', () => {
+            updatePresets();
+            ['NORTH', 'EAST', 'SOUTH', 'WEST'].forEach(d => spawnCar(d));
+            lastTime = performance.now();
+            requestAnimationFrame(mainLoop);
+        });
     </script>
 </body>
 </html>
